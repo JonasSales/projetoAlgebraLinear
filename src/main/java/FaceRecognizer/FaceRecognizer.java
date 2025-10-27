@@ -1,7 +1,7 @@
 package FaceRecognizer;
 
-import FisherfacesModel.FisherfacesModel; // Antes: EigenfacesModel
-import ImageProcessor.ImageProcessor;
+import Data.RecognitionResult;
+import FisherfacesModel.FisherfacesModel;
 import org.apache.commons.math3.linear.ArrayRealVector;
 import org.apache.commons.math3.linear.RealVector;
 import org.apache.commons.math3.linear.RealMatrix;
@@ -10,76 +10,84 @@ import java.util.List;
 
 public class FaceRecognizer {
 
-    // Mudar o tipo do modelo
-    private final FisherfacesModel model; // Antes: EigenfacesModel
+    private final FisherfacesModel model;
+    // O limiar (threshold) é agora uma propriedade da instância
+    private final double recognitionThreshold;
 
-    // Mudar o construtor
-    public FaceRecognizer(FisherfacesModel model, ImageProcessor processor) { // Antes: EigenfacesModel
+    public FaceRecognizer(FisherfacesModel model, ImageProcessor.ImageProcessor processor) {
         this.model = model;
+        // A escala das distâncias no espaço LDA (C-1) é
+        // completamente diferente da do espaço PCA (K).
+        // Este valor (12.0e6) deve ser ajustado/calibrado.
+        this.recognitionThreshold = 12.0e6;
     }
 
     /**
      * Implementa a Fase de Reconhecimento: Projeção e Classificação.
-     * Retorna o nome da pessoa reconhecida junto com a distância euclidiana (quadrada).
+     * Retorna um objeto RecognitionResult com os detalhes.
      * @param inputVector O vetor 1D da imagem de teste.
-     * @return Uma string contendo o rótulo e o valor mensurável (distância).
+     * @param fileName O nome do arquivo original para o relatório.
+     * @return Um objeto RecognitionResult.
      */
-    public String recognize(double[] inputVector) {
-        // ESTE CÓDIGO FUNCIONA EXATAMENTE COMO ANTES!
-        // model.getEigenfaces() agora retorna W_final (W_pca * W_lda)
-        // model.getMeanVector() retorna a média global
-        // model.getProjectedFaces() retorna os vetores de treino no espaço LDA (C-1)
+    public RecognitionResult recognize(double[] inputVector, String fileName) {
+        if (model.getEigenfaces() == null || model.getMeanVector() == null || model.getProjectedFaces() == null) {
+            return new RecognitionResult(fileName, "Modelo não treinado", -1, false);
+        }
 
-        RealMatrix eigenfaces = model.getEigenfaces();
-        double[] mean = model.getMeanVector();
+        // Projeta o vetor de entrada no subespaço Fisher
+        double[] coeffs = project(inputVector);
 
-        if (eigenfaces == null || mean == null || model.getProjectedFaces() == null) return "Modelo não treinado";
-
-        // calcula diff (dim)
-        RealVector diff = new ArrayRealVector(inputVector).subtract(new ArrayRealVector(mean));
-
-        // projeta no subespaço final: coeffs = eigenfaces^T * diff (tamanho C-1)
-        RealVector coeffs = eigenfaces.transpose().operate(diff);
-        double[] c = coeffs.toArray();
-
-        // compara com projeções treinadas (todas têm tamanho C-1)
+        // Encontra a correspondência mais próxima
         double bestDist = Double.POSITIVE_INFINITY;
         int bestIdx = -1;
         List<double[]> projections = model.getProjectedFaces();
+
         for (int i = 0; i < projections.size(); i++) {
-            double[] p = projections.get(i);
-            if (p == null || p.length != c.length) continue;
-            double d = 0;
-            for (int j = 0; j < c.length; j++) {
-                double diffc = c[j] - p[j];
-                d += diffc * diffc;
-            }
+            double d = euclideanDistanceSquared(coeffs, projections.get(i));
             if (d < bestDist) {
                 bestDist = d;
                 bestIdx = i;
             }
         }
 
-        String label = "Desconhecido";
-        // NOTA: O limiar (threshold) provavelmente precisará ser ajustado!
-        // A escala das distâncias no espaço LDA (C-1 dimensões) é
-        // completamente diferente da do espaço PCA (K dimensões).
-        // Sugiro começar com um valor muito mais baixo ou testar.
-        double threshold = 12.0e6; // Valor anterior: 15e6. Ajuste conforme necessário.
-
-        if (bestIdx != -1) {
-            label = bestDist < threshold ? model.getLabels().get(bestIdx) : "Desconhecido";
+        if (bestIdx == -1) {
+            return new RecognitionResult(fileName, "Desconhecido", bestDist, false);
         }
 
-        return String.format("%s (Distância Euclidiana Quadrada: %.2f)", label, bestDist);
+        // Compara com o limiar
+        String label = model.getLabels().get(bestIdx);
+        boolean isMatch = bestDist < recognitionThreshold;
+
+        // Se não for uma correspondência, retorne a etiqueta mais próxima, mas marque como "não encontrado"
+        String recognizedLabel = isMatch ? label : "Desconhecido";
+
+        // Retorna o resultado estruturado
+        return new RecognitionResult(fileName, recognizedLabel, bestDist, isMatch);
     }
 
-    // ... método euclideanDistance (sem alterações) ...
-    private double euclideanDistance(double[] v1, double[] v2) {
+    /**
+     * Projeta um vetor de imagem no subespaço Fisher.
+     */
+    private double[] project(double[] inputVector) {
+        RealMatrix eigenfaces = model.getEigenfaces();
+        double[] mean = model.getMeanVector();
+
+        // diff = inputVector - mean
+        RealVector diff = new ArrayRealVector(inputVector).subtract(new ArrayRealVector(mean));
+
+        // projeta no subespaço final: coeffs = eigenfaces^T * diff
+        return eigenfaces.transpose().operate(diff).toArray();
+    }
+
+    /**
+     * Calcula a distância Euclidiana quadrada (mais rápida que sqrt).
+     */
+    private double euclideanDistanceSquared(double[] v1, double[] v2) {
         double sumOfSquares = 0.0;
         for (int i = 0; i < v1.length; i++) {
-            sumOfSquares += Math.pow(v1[i] - v2[i], 2);
+            double diffc = v1[i] - v2[i];
+            sumOfSquares += diffc * diffc;
         }
-        return Math.sqrt(sumOfSquares);
+        return sumOfSquares;
     }
 }
