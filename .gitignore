@@ -38,6 +38,7 @@ build/
 *.png
 *.jpg
 *.jpeg
+./data/*
 
 ### Mac OS ###
 .DS_Store
