@@ -1,5 +1,5 @@
-import EigenfacesModel.EigenfacesModel;
 import FaceRecognizer.FaceRecognizer;
+import FisherfacesModel.FisherfacesModel;
 import ImageProcessor.ImageProcessor;
 
 
@@ -12,12 +12,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class Main {
-
-    // --- 1. DEFINIÇÃO DAS PASTAS (Atualizado para o novo contexto) ---
     private static final String DATA_FOLDER = "data";
-    // Pasta do banco de dados de indivíduos registrados
     private static final String DATABASE_FOLDER = "database_criminosos";
-    // Pasta das imagens a serem verificadas
     private static final String SUSPECTS_FOLDER = "suspeitos";
 
     public static void main(String[] args) {
@@ -25,50 +21,50 @@ public class Main {
         List<double[]> trainingVectors = new ArrayList<>();
         List<String> trainingLabels = new ArrayList<>();
 
-        // Obtém o caminho raiz do projeto
         String projectDir = System.getProperty("user.dir");
-        Path databasePath = Paths.get(projectDir, DATA_FOLDER, DATABASE_FOLDER); // Caminho atualizado
-        Path suspectsPath = Paths.get(projectDir, DATA_FOLDER, SUSPECTS_FOLDER); // Caminho atualizado
+        Path databasePath = Paths.get(projectDir, DATA_FOLDER, DATABASE_FOLDER);
+        Path suspectsPath = Paths.get(projectDir, DATA_FOLDER, SUSPECTS_FOLDER);
 
         System.out.println(STR."Carregando banco de dados de indivíduos de: \{databasePath}");
 
-        // --- 2. CARREGAMENTO DO BANCO DE DADOS ---
         try {
-            // A função é a mesma, mas o contexto muda: "treinar" = "carregar BD"
             loadTrainingData(databasePath, processor, trainingVectors, trainingLabels);
             System.out.println(STR."Banco de dados carregado: \{trainingVectors.size()} imagens de referência.");
 
             if (trainingVectors.isEmpty()) {
-                System.err.println("Nenhuma imagem encontrada no banco de dados.");
-                System.err.println(STR."Verifique se a pasta '\{databasePath}' existe e contém subpastas com imagens.");
                 return;
             }
-
         } catch (IOException e) {
             System.err.println(STR."Erro ao carregar banco de dados: \{e.getMessage()}");
             return;
         }
 
-        // --- 3. PROCESSAMENTO (Treinamento do Modelo PCA) ---
-        int kComponents = Math.min(Math.max(1, trainingVectors.size() - 1), 50);
-        EigenfacesModel model = new EigenfacesModel(kComponents); //
+        // --- 3. PROCESSAMENTO (Treinamento do Modelo Fisherfaces) ---
 
-        System.out.println(STR."Processando banco de dados (Treinamento com K=\{kComponents})...");
+        // REMOVER o cálculo de kComponents. O modelo determina-o sozinho.
+        // int kComponents = Math.min(Math.max(1, trainingVectors.size() - 1), 50);
+
+        // MUDAR a instanciação do modelo
+        FisherfacesModel model = new FisherfacesModel(); // Antes: new EigenfacesModel(kComponents)
+
+        // MUDAR a mensagem de log
+        System.out.println("Processando banco de dados (Treinamento Fisherfaces PCA+LDA)...");
         model.train(trainingVectors, trainingLabels); //
 
         if (model.getEigenfaces() != null) {
-            System.out.println(STR."Processamento concluído. Número de Eigenfaces geradas: \{model.getEigenfaces().getColumnDimension()}");
+            // Esta linha agora imprime o N. de componentes LDA (C-1)
+            System.out.println(STR."Processamento concluído. Número de Fisherfaces geradas: \{model.getEigenfaces().getColumnDimension()}");
         } else {
-            System.out.println("Processamento falhou ou não gerou Eigenfaces.");
+            System.out.println("Processamento falhou ou não gerou Fisherfaces.");
             return;
         }
 
         // --- 4. VERIFICAÇÃO DE SUSPEITOS ---
-        FaceRecognizer recognizer = new FaceRecognizer(model, processor); //
+        // Esta linha funciona, pois o FaceRecognizer foi atualizado
+        FaceRecognizer recognizer = new FaceRecognizer(model, processor);
         System.out.println(STR."\n--- Iniciando Verificação de Suspeitos na pasta: \{suspectsPath} ---");
 
         try {
-            // O nome da função mudou para clareza
             runSuspectVerification(suspectsPath, processor, recognizer);
         } catch (IOException e) {
             System.err.println(STR."Erro ao verificar imagens de suspeitos: \{e.getMessage()}");

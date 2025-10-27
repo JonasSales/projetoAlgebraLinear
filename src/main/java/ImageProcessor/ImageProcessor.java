@@ -1,5 +1,6 @@
 package ImageProcessor;
 
+import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
@@ -23,16 +24,6 @@ public class ImageProcessor {
         return convertToGrayscaleVector(resizedImage);
     }
 
-    // [Implementação do método de Redimensionamento (java.awt.Image)]
-    private BufferedImage resizeImage(BufferedImage originalImage, int width, int height) {
-        // Implementação do redimensionamento aqui. Pode usar getScaledInstance ou similar.
-        // **Nota:** A implementação exata de redimensionamento e conversão de cor
-        // pode ser complexa e é onde uma biblioteca como JavaCV/OpenCV ajudaria.
-        // Para fins deste projeto didático, assuma que esta função retorna a imagem
-        // no tamanho correto ou use imagens pré-processadas.
-        return originalImage; // Implementação simplificada
-    }
-    
     /**
      * Converte a imagem (redimensionada) para escala de cinza e para um vetor 1D de doubles.
      * @param img A imagem processada.
@@ -55,5 +46,16 @@ public class ImageProcessor {
             }
         }
         return vector;
+    }
+
+    private BufferedImage resizeImage(BufferedImage originalImage, int width, int height) {
+        Image tmp = originalImage.getScaledInstance(width, height, Image.SCALE_SMOOTH);
+
+        BufferedImage resizedImage = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
+        Graphics2D g2d = resizedImage.createGraphics();
+        g2d.drawImage(tmp, 0, 0, null);
+        g2d.dispose();
+
+        return resizedImage;
     }
 }
