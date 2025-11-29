@@ -7,6 +7,7 @@ import org.apache.commons.math3.linear.ArrayRealVector;
 import org.apache.commons.math3.linear.RealMatrix;
 import org.apache.commons.math3.linear.RealVector;
 
+import java.util.ArrayList;
 import java.util.List;
 
 public class FaceRecognizer {
@@ -14,14 +15,16 @@ public class FaceRecognizer {
     private final FisherfacesModel model;
     private double recognitionThreshold;
 
+    // Classe auxiliar interna para ranking
+    private record MatchCandidate(String label, double distance) {}
+
     public FaceRecognizer(FisherfacesModel model, ImageProcessor processor, double threshold) {
         this.model = model;
         this.recognitionThreshold = threshold;
     }
 
-    // Sobrecarga para valor padrão
     public FaceRecognizer(FisherfacesModel model, ImageProcessor processor) {
-        this(model, processor, 12.0e6); // Valor padrão original, ajuste conforme necessário
+        this(model, processor, 12.0e6);
     }
 
     public void setRecognitionThreshold(double value) {
@@ -35,27 +38,39 @@ public class FaceRecognizer {
 
         double[] coeffs = project(inputVector);
 
-        double bestDist = Double.POSITIVE_INFINITY;
-        int bestIdx = -1;
+        // Calcular todas as distâncias para criar um ranking
+        List<MatchCandidate> ranking = new ArrayList<>();
         List<double[]> projections = model.getProjectedFaces();
+        List<String> labels = model.getLabels();
 
         for (int i = 0; i < projections.size(); i++) {
             double d = euclideanDistanceSquared(coeffs, projections.get(i));
-            if (d < bestDist) {
-                bestDist = d;
-                bestIdx = i;
-            }
+            ranking.add(new MatchCandidate(labels.get(i), d));
         }
 
-        if (bestIdx == -1) {
-            return new RecognitionResult(fileName, "Desconhecido", bestDist, false);
+        // Ordenar por menor distância
+        ranking.sort((c1, c2) -> Double.compare(c1.distance, c2.distance));
+
+        // --- EXIBIÇÃO DIDÁTICA DO RANKING ---
+        System.out.println("--------------------------------------------------");
+        System.out.printf("Analisando imagem: %s%n", fileName);
+        System.out.println("Ranking de Proximidade (Cálculo de Distância Euclidiana):");
+        for (int i = 0; i < Math.min(3, ranking.size()); i++) {
+            MatchCandidate c = ranking.get(i);
+            System.out.printf("  %dº. Candidato: %-15s | Distância: %.2f%n", (i+1), c.label, c.distance);
         }
 
-        String label = model.getLabels().get(bestIdx);
-        // Lógica simples: se distância < limiar, é match.
-        boolean isMatch = bestDist < recognitionThreshold;
+        MatchCandidate best = ranking.getFirst();
+        boolean isMatch = best.distance < recognitionThreshold;
 
-        return new RecognitionResult(fileName, isMatch ? label : "Desconhecido", bestDist, isMatch);
+        if (isMatch) {
+            System.out.println("  -> CONCLUSÃO: Correspondência Confirmada!");
+        } else {
+            System.out.println("  -> CONCLUSÃO: Distância muito alta. Desconhecido.");
+        }
+        System.out.println("--------------------------------------------------");
+
+        return new RecognitionResult(fileName, isMatch ? best.label : "Desconhecido", best.distance, isMatch);
     }
 
     private double[] project(double[] inputVector) {
