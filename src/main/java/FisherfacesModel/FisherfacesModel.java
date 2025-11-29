@@ -26,12 +26,12 @@ public class FisherfacesModel {
     }
 
     /**
-     * Método público principal que orquestra o treinamento.
+     * Metodo público principal que orquestra o treinamento.
      */
     public void train(TrainingData data) {
         int m = data.size(); // N (Número total de amostras)
         if (m == 0) throw new IllegalArgumentException("Nenhuma imagem de treinamento.");
-        int dim = data.vectors().get(0).length;
+        int dim = data.vectors().getFirst().length;
 
         // --- Agrupar dados ---
         Map<String, List<double[]>> classes = agruparPorClasse(data.vectors(), data.labels());
@@ -54,6 +54,7 @@ public class FisherfacesModel {
         // --- PASSO 2: LDA ---
         // k_lda = C - 1
         int k_lda = C - 1;
+        assert projectedClasses != null;
         executarLDA(projectedClasses, k_pca_actual, k_lda, m);
 
         // --- PASSO 3: Finalização ---
