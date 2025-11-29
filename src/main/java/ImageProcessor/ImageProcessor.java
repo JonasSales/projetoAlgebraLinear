@@ -30,13 +30,10 @@ public class ImageProcessor {
      * @return O vetor de pixels 1D.
      */
     private double[] convertToGrayscaleVector(BufferedImage img) {
-        int width = img.getWidth();
-        int height = img.getHeight();
-        int size = width * height;
-        double[] vector = new double[size];
+        double[] vector = new double[VECTOR_SIZE];
         int idx = 0;
-        for (int y = 0; y < height; y++) {
-            for (int x = 0; x < width; x++) {
+        for (int y = 0; y < IMAGE_HEIGHT; y++) {
+            for (int x = 0; x < IMAGE_WIDTH; x++) {
                 int rgb = img.getRGB(x, y);
                 int r = (rgb >> 16) & 0xFF;
                 int g = (rgb >> 8) & 0xFF;
