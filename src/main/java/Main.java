@@ -19,7 +19,7 @@ void main(String[] args) {
     // Configuração de caminhos (Ajuste conforme seu projeto)
     String dbPathStr = "data/database_criminosos";
     String suspectsPathStr = "data/suspeitos";
-    double threshold = 15.0e6;
+    double threshold = 12.0e6;
 
     if (args.length >= 1) dbPathStr = args[0];
     if (args.length >= 2) suspectsPathStr = args[1];
