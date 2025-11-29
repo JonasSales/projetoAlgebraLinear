@@ -11,59 +11,67 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
 
-private static final String DATA_FOLDER = "data";
-private static final String DATABASE_FOLDER = "database_criminosos";
-private static final String SUSPECTS_FOLDER = "suspeitos";
+// Padrões apenas se nenhum argumento for passado
+private static final String DEFAULT_DB = "data/database_criminosos";
+private static final String DEFAULT_SUSPECTS = "data/suspeitos";
 
-void main() {
-    // --- 1. INICIALIZAÇÃO ---
+void main(String[] args) {
+    // Configuração de caminhos via argumentos (CLI) ou fallback
+    String dbPathStr = (args.length >= 1) ? args[0] : DEFAULT_DB;
+    String suspectsPathStr = (args.length >= 2) ? args[1] : DEFAULT_SUSPECTS;
+    // Permite ajuste do threshold via argumento 3
+    double threshold = (args.length >= 3) ? Double.parseDouble(args[2]) : 15.0e6;
+
+    Path databasePath = Paths.get(System.getProperty("user.dir"), dbPathStr);
+    Path suspectsPath = Paths.get(System.getProperty("user.dir"), suspectsPathStr);
+
+    System.out.println("=== SISTEMA DE RECONHECIMENTO FACIAL (FISHERFACES) ===");
+    System.out.println("Configuração:");
+    System.out.println("  - Banco de Treino: " + databasePath);
+    System.out.println("  - Pasta Suspeitos: " + suspectsPath);
+    System.out.println("  - Limiar Distância: " + threshold);
+
+    // 1. Inicialização
     ImageProcessor processor = new ImageProcessor();
     DatabaseLoader loader = new DatabaseLoader(processor);
     FisherfacesModel model = new FisherfacesModel();
 
-    String projectDir = System.getProperty("user.dir");
-    Path databasePath = Paths.get(projectDir, DATA_FOLDER, DATABASE_FOLDER);
-    Path suspectsPath = Paths.get(projectDir, DATA_FOLDER, SUSPECTS_FOLDER);
-
     try {
-        // --- 2. CARREGAMENTO ---
-        System.out.printf("Carregando banco de dados de indivíduos de: %s%n", databasePath);
+        // 2. Carregamento (Paralelo)
+        long startLoad = System.currentTimeMillis();
         TrainingData trainingData = loader.loadFromDirectory(databasePath);
-        System.out.printf("Banco de dados carregado: %d imagens de referência.%n", trainingData.size());
+        long endLoad = System.currentTimeMillis();
 
         if (trainingData.isEmpty()) {
-            System.err.println("Nenhuma imagem de treinamento encontrada. Encerrando.");
+            System.err.println("[ERRO] Nenhuma imagem encontrada. Verifique o caminho.");
             return;
         }
+        System.out.printf("Carregamento concluído em %d ms. Imagens: %d%n", (endLoad - startLoad), trainingData.size());
 
-        // --- 3. TREINAMENTO ---
-        System.out.println("Processando banco de dados (Treinamento Fisherfaces PCA+LDA)...");
+        // 3. Treinamento
+        System.out.println("Iniciando treinamento do modelo...");
         model.train(trainingData);
+        System.out.printf("Treinamento OK. Fisherfaces: %d%n", model.getEigenfaces().getColumnDimension());
 
-        if (model.getEigenfaces() != null) {
-            System.out.printf("Processamento concluído. Número de Fisherfaces geradas: %d%n", model.getEigenfaces().getColumnDimension());
-        } else {
-            System.out.println("Processamento falhou ou não gerou Fisherfaces.");
-            return;
-        }
-
-        // --- 4. VERIFICAÇÃO ---
-        FaceRecognizer recognizer = new FaceRecognizer(model, processor);
+        // 4. Reconhecimento
+        FaceRecognizer recognizer = new FaceRecognizer(model, processor, threshold);
         VerificationService verificationService = new VerificationService(processor, recognizer);
 
-        System.out.printf("\n--- Iniciando Verificação de Suspeitos na pasta: %s ---%n", suspectsPath);
+        System.out.println("\n--- Resultados da Verificação ---");
         List<RecognitionResult> results = verificationService.verifySuspects(suspectsPath);
 
         if (results.isEmpty()) {
-            System.out.println("Nenhum suspeito encontrado para verificação.");
+            System.out.println("Nenhum arquivo processado na pasta de suspeitos.");
         } else {
-            results.forEach(System.out::println);
+            for (RecognitionResult r : results) {
+                System.out.println(r);
+            }
         }
 
     } catch (IOException e) {
-        System.err.printf("Erro de I/O: %s%n", e.getMessage());
+        System.err.println("Erro Crítico de I/O: " + e.getMessage());
     } catch (Exception e) {
-        System.err.printf("Erro inesperado no processamento: %s%n", e.getMessage());
+        System.err.println("Erro Geral: " + e.getMessage());
         e.printStackTrace();
     }
 }
